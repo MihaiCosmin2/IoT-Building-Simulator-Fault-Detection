@@ -1,0 +1,50 @@
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:latest
+    container_name: bms_mqtt_broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    restart: unless-stopped
+
+  db:
+    image: postgres:15
+    container_name: bms_db
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=database_pass
+      - POSTGRES_DB=iot_data
+    ports:
+      - "5432:5432"
+
+  simulator:
+    build: .
+    container_name: hvac_simulator
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: python sensor_sim.py
+    depends_on:
+      - mqtt-broker
+
+  monitor:
+    build: .
+    container_name: hvac_monitor
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_HOST=db
+    command: python monitor.py
+    depends_on:
+      - mqtt-broker
+      - db
+  
+  dashboard:
+    build: .
+    container_name: hvac_dashboard
+    environment:
+      - DB_HOST=db
+    ports:
+      - "8501:8501"
+    command: streamlit run dashboard.py --server.address=0.0.0.0
+    depends_on:
+      - db
